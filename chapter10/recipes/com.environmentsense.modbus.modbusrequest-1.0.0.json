@@ -1,0 +1,40 @@
+{
+    "RecipeFormatVersion": "2020-01-25",
+    "ComponentName": "com.environmentsense.modbus.modbusrequest",
+    "ComponentVersion": "1.0.0",
+    "ComponentDescription": "modbus RTU Request component.",
+    "ComponentPublisher": "EnvironmentSense",
+    "ComponentConfiguration": {
+      "DefaultConfiguration": {
+        "Message": "request",
+        "accessControl": {
+          "aws.greengrass.ipc.pubsub": {
+            "com.example.HelloWorld:pubsub:1": {
+              "policyDescription": "Allows access to publish to topic.",
+              "operations": [
+                "aws.greengrass#PublishToTopic"
+              ],
+              "resources": [
+                "modbus/request/conveyer"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "Manifests": [
+      {
+        "Platform": {
+          "os": "linux"
+        },
+        "Lifecycle": {
+          "Install": {
+            "script": "python3 -m pip install --user awsiotsdk"
+          },
+          "Run": {
+            "script": "python3 -u {artifacts:path}/modbusrequest.py '{configuration:/message}'"
+          }
+        }
+      }
+    ]
+  }
