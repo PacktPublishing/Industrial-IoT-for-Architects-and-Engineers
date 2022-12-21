@@ -1,0 +1,347 @@
+import json, boto3,os, sys, uuid, datetime, dateutil.parser, time, base64
+from urllib.parse import unquote_plus
+import logging
+from botocore.exceptions import ClientError
+from ast import literal_eval  
+
+s3_client = boto3.client('s3')
+lambda_client = boto3.client('lambda')
+timestream_client = boto3.client('timestream-write')
+
+def lambda_handler(event, context):
+    
+
+    print(os.environ)
+    print("Received event: " + json.dumps(event, indent=2))
+    print("event type: ")
+    print(type(event))
+
+    #parse out initial values
+    payload64 = event.get("PayloadData", None)
+    print("Raw Payload: " + payload64)
+    deveui = event["WirelessMetadata"]["LoRaWAN"].get("DevEui", None)
+    print("DevEui: " + deveui)
+    timestamp = event["WirelessMetadata"]["LoRaWAN"].get("Timestamp", None)
+    print("TimeStamp: " + timestamp)
+    
+    #strip out timestamp values (probably a more efficient way of doing this)
+    format =  "%Y-%m-%dT%H:%M:%SZ"
+    dt_object = datetime.datetime.strptime(timestamp, format)
+    print("Datetime: ", dt_object)
+    year =  datetime.datetime.strptime(timestamp, format).year
+    print("Year: ", year)
+    month =  datetime.datetime.strptime(timestamp, format).month
+    print("Month: ", month)
+    day =  datetime.datetime.strptime(timestamp, format).day
+    print("Day: " , day)
+    minute =  datetime.datetime.strptime(timestamp, format).minute
+    print("Minute: ", minute)
+    hour =  datetime.datetime.strptime(timestamp, format).hour
+    print("Hour: ", hour)
+    second =  datetime.datetime.strptime(timestamp, format).second
+    print("Second: ", second)
+
+    unixtime = dt_object.timestamp()
+    print("timestamp: ", unixtime)
+    
+    #dump initial message into raw datalake
+    s3 = boto3.client("s3")
+    bucket_name = "s3-datalake-iot-raw"
+    file_name = str(minute) + ":" + str(second) + ".json" 
+    folder_path = "lorawan/am319/" + str(deveui) + "/" + str(year) + "/" + str(month) + "/" + str(day) + "/" + str(hour) + "/" + file_name 
+    s3.put_object(Bucket=bucket_name, Key=folder_path, Body=json.dumps(event, indent=2))
+
+    #json_region = os.environ['AWS_REGION']
+    #print("AWS Region: " + json_region)
+    
+    payload_hex = base64.b64decode(payload64)
+    print("64 Decoded payload: " + str(payload_hex))
+    print(type(payload_hex))
+    
+    print(str(base64.b64decode(payload64).hex))
+    
+    #decode the payload
+    #payload_decoded = decode(payload_hex)
+    
+    
+    response = lambda_client.invoke(
+        FunctionName = 'arn:aws:lambda:us-west-2:305723022616:function:iot_decode_lorawan_raw_am319',
+        InvocationType = 'RequestResponse',
+        Payload = json.dumps(event)
+    )
+ 
+    decode_response = json.load(response['Payload'])
+    #print(decode_response)
+    
+    response_json = literal_eval(json.dumps(decode_response, indent=2))
+    #print(type(final_final))
+    print("response_json")
+    print(response_json)
+    print(type(response_json))
+    
+    message_body = response_json.get("body")
+    print("message_body")
+    print(message_body)
+    print(type(message_body))
+    
+    
+    #store transformed message into formatted data lake
+
+    bucket_name = "s3-datalake-iot-formatted"
+    file_name = str(minute) + ":" + str(second) + ".json" 
+    folder_path = "lorawan/am319/" + str(deveui) + "/" + str(year) + "/" + str(month) + "/" + str(day) + "/" + str(hour) + "/" + file_name 
+    s3.put_object(Bucket=bucket_name, Key=folder_path, Body=json.dumps(message_body, indent=2))
+
+    
+    
+    #Store data into timestream
+    
+    timestream_values = json.loads(message_body)
+    print("timestream_values")
+    print(timestream_values)
+    print(type(timestream_values))
+    
+    print("Writing records to timestream")
+    
+    #currentDT = datetime.datetime.now()
+    #2022-02-27T13:14:31Z\\""}'}
+    #current_time = currentDT.strftime("%Y-%m-%d %H:%M:%S")
+    current_time = str(int(round(time.time() * 1000)))
+    print(current_time)
+
+
+    deveui = timestream_values.get("deveui", None).strip('"')
+    original_timestamp = timestream_values.get("timestamp", None)
+    
+    #Dimensions are required for every timestream entry. 
+    dimensions = [
+        {'Name': 'device', 'Value': 'am319'},
+        {'Name': 'source', 'Value': 'lorawan'},
+        {'Name': 'deveui', 'Value': deveui}
+    ]
+
+    # Not used this time.  throwing some type of conversion error.
+    #common_attributes = {
+    #    "Dimensions": dimensions,
+    #    'Time': timestamp,
+    #    'Version': '001'
+    #}
+
+    #print(response_json)
+    #print(type(response_json))
+    
+    temperature = {
+        "Dimensions":dimensions,
+        'MeasureName': 'temperature',
+        'MeasureValue': str(timestream_values.get("temperature", None)),
+        #'MeasureValue': '21.5',
+        'MeasureValueType': 'DOUBLE',
+        'Time': current_time
+    }
+
+    humidity = {
+        "Dimensions":dimensions,
+        'MeasureName': 'humidity',
+        'MeasureValue': str(timestream_values.get("humidity", None)),
+        'MeasureValueType': 'DOUBLE',
+        'Time': current_time
+    }
+    
+    pir_raw = str(timestream_values.get("pir", None))
+    pir_value = '0'
+    if(pir_raw == 'idle'):
+        pir_value = '0'
+    else :
+        pir_value = '1'
+
+    
+    pir = {
+        "Dimensions":dimensions,
+        'MeasureName': 'pir',
+        'MeasureValue': pir_value,
+        'MeasureValueType': 'BIGINT',
+        'Time': current_time
+    }
+
+    light_level = {
+        "Dimensions":dimensions,
+        'MeasureName': 'light_level',
+        'MeasureValue': str(timestream_values.get("light_level", None)),
+        'MeasureValueType': 'DOUBLE',
+        'Time': current_time
+    }
+
+    co2 = {
+        "Dimensions":dimensions,
+        'MeasureName': 'co2',
+        'MeasureValue': str(timestream_values.get("co2", None)),
+        'MeasureValueType': 'DOUBLE',
+        'Time': current_time
+    }
+
+    tvoc = {
+        "Dimensions":dimensions,
+        'MeasureName': 'tvoc',
+        'MeasureValue': str(timestream_values.get("tvoc", None)),
+        'MeasureValueType': 'DOUBLE',
+        'Time': current_time
+    }
+
+    pressure = {
+        "Dimensions":dimensions,
+        'MeasureName': 'pressure',
+        'MeasureValue': str(timestream_values.get("pressure", None)),
+        'MeasureValueType': 'DOUBLE',
+        'Time': current_time
+    }
+    
+    hcho = {
+        "Dimensions":dimensions,
+        'MeasureName': 'hcho',
+        'MeasureValue': str(timestream_values.get("hcho", None)),
+        'MeasureValueType': 'DOUBLE',
+        'Time': current_time
+    }
+
+    pm2_5 = {
+        "Dimensions":dimensions,
+        'MeasureName': 'pm2_5',
+        'MeasureValue': str(timestream_values.get("pm2_5", None)),
+        'MeasureValueType': 'DOUBLE',
+        'Time': current_time
+    }
+
+    pm10 = {
+        "Dimensions":dimensions,
+        'MeasureName': 'pm10',
+        'MeasureValue': str(timestream_values.get("pm10", None)),
+        'MeasureValueType': 'DOUBLE',
+        'Time': current_time
+    }
+   
+
+    records = [temperature, humidity, pir, light_level, co2, tvoc, pressure, hcho, pm2_5, pm10]
+
+    #print(records)
+    #print(type(records))
+    
+    
+    try:
+        print("writing data to timestream")
+        result = timestream_client.write_records(DatabaseName='am319', TableName='data', Records=records, CommonAttributes={})
+        print("WriteRecords Status: [%s]" % result['ResponseMetadata']['HTTPStatusCode'])
+    except timestream_client.exceptions.RejectedRecordsException as err:
+            print("RejectedRecords: ", err)
+            for rr in err.response["RejectedRecords"]:
+                print("Rejected Index " + str(rr["RecordIndex"]) + ": " + rr["Reason"])
+            print("Other records were written successfully. ")
+    except Exception as err:
+            print("Error:", err)
+    
+    
+    #finish the lambda call
+    return {
+        #'statusCode': 200,
+        #'body': json.dumps('file is created at:' + bucket_name + "/" + folder_path ) :
+        'body': message_body
+    }
+    
+    
+    
+def decode(bytes):
+   #decode the payload
+   print("starting decoding sequence...")
+   decoded = {}
+   
+   print(bytes)
+   print(type(bytes))
+   
+   byte_array = bytes.hex()
+   print(byte_array)
+   print(type(byte_array))
+ 
+   # print(str(payload_hex.hex))
+   
+    #looping through the byte array
+   #cs = 0    
+   #for byte in range(len(bytes)):
+   #  cs = bytes[byte]
+     #print(type(cs))
+     #print(cs)
+     #print(str(cs))
+   #  print(hex(cs))
+   #return cs & 0xffff
+  
+  
+   i = 0
+   while i < (len(bytes)-1):
+        print("index: " + str(i))
+        #i += 1
+        print(hex(bytes[i]))
+  
+        channel_id = hex(bytes[i])
+        i += 1
+        channel_type = hex(bytes[i])
+        i += 1
+        
+        print("channel_id: " + channel_id)
+        print(type(channel_id))
+        print("channel_type: " + channel_type)
+        print(type(channel_type))
+        
+        #TEMPERATURE
+        #if channel_id == '0x03' && channel_type == '0x67' :
+        if channel_id == "0x3" :
+            print("decoding temperature")
+            temperature = hex(bytes[i]) + hex(bytes[i+1])
+            print(type(temperature))
+            print("temp in hex: " + temperature)
+            
+            #temp_array = temperature.hex()
+            #print(temp_array)
+            #print(type(temp_array))
+            
+            #convertion = literal_eval(temperature, 16)
+            #print(convertion)
+            
+            
+            
+            #print int(temperature , 16) 
+            #print("temp: " + int(d700, 16))
+            #print int(temperature,16)
+            i += 2
+        
+        else :
+           print("didn't match temp")
+            
+            #print("raw temp: " + str(hex(bytes[i]) + " " + str(hex(bytes[i]))))
+            
+            # ℃
+            #decoded.temperature = readInt16LE(bytes.slice(i, i + 2)) / 10;
+            #i += 2;
+
+            # ℉
+            # decoded.temperature = readInt16LE(bytes.slice(i, i + 2)) / 10 * 1.8 + 32;
+            # i +=2;
+        #HUMIDITY
+        #elif (channel_id == 0x04 && channel_type == 0x68) :
+        print("decoding humidity")
+            
+        
+
+
+## not used in this function    
+  
+   #for byte in payload_hex:
+#        var channel_id = bytes[i++];
+#        var channel_type = bytes[i++];
+#        print(channel_id)
+#        print(channel_type)
+    
+   
+ #  return decoded;    
+   
+ #   @staticmethod
+ #   def _current_milli_time():
+ #       return str(int(round(time.time() * 1000)))
+ 
