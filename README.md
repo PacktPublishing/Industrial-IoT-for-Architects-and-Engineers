@@ -39,7 +39,7 @@ This book is for architects, engineers, developers, and technical professionals 
 
 With the following software and hardware list you can run all code files present in the book (Chapter 1-8).
 ### Software and Hardware List
- | <b>Soft ware/hardware covered in the book</b> | <b>Operating system requirements</b> |
+ | <b>Software/hardware covered in the book</b> | <b>Operating system requirements</b> |
  | ------------------------------------ | ----------------------------------- |
  | <b>Python</b>: Knowledge of Python will be helpful. Code examples are in Python but are easy to follow if you are unfamiliar with the language. The code samples are easy to read and edit in your environment. | Much of the hands-on work is done within the AWS console. You will require an AWS account and some familiarity. Most examples work within the free tier; however, in the final chapter, which uses Amazon SageMaker, you should track your cost closely. |
  | <b>Visual Studio Code</b>: This is used in some of the later chapters for all the Python code examples. This includes lambdas and edge components that we create. As an IDE, it is easy to use and free! | All the edge processing examples within the book use the Linux operating system, which may require knowing the basic commands when working on a Linux system. |
