@@ -58,3 +58,8 @@ Anthony (Joey) Bernal is a creative technical leader focused on the Internet of 
 
 **Bharath Sridhar**<br>
 Bharath Sridhar is a technology evangelist and solution architect with over 12 years of experience in digital transformation through IoT. With a constantly curious and exploratory mindset, he works as an enabler of industry 4.0 implementations for Fortune 500 companies. He loves to operate at the intersection of desirability, viability, and feasibility, working to create utilitarian solutions that people love and businesses get delighted and technologists get excited about. He is passionate about knowledge sharing through storytelling. He believes that books are a gateway to curated journeys of personal discovery, experiences, and enlightened knowledge. In his free time, he dreams about the multiverse – its evolution, challenges, and solutions.
+
+### Download a free PDF
+
+ <i>If you have already purchased a print or Kindle version of this book, you can get a DRM-free PDF version at no cost.<br>Simply click on the link to claim your free PDF.</i>
+<p align="center"> <a href="https://packt.link/free-ebook/9781803240893">https://packt.link/free-ebook/9781803240893 </a> </p>
